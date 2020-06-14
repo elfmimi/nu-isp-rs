@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "nu-isp",
+    "nu-isp-cli",
+]
+
+# refer to https://doc.rust-lang.org/cargo/reference/profiles.html
+[profile.release]
+#codegen-units = 1
+#debug = true
+#lto = true
+#opt-level = 'z'

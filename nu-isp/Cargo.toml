@@ -1,0 +1,15 @@
+[package]
+name = "nu-isp"
+version = "0.5.0"
+authors = ["Ein Terakawa <applause@elfmimi.jp>"]
+edition = "2018"
+description = "Nuvoton ISP_HID protocol library"
+repository = "https://github.com/elfmimi/nu-isp-rs"
+keywords = ["nuvoton", "isp", "hid", "flash"]
+categories = ["development-tools", "embedded"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+log = "0.4.6"
+hidapi = "1.2.1"
