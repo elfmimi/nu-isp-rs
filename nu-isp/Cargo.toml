@@ -1,6 +1,6 @@
 [package]
 name = "nu-isp"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Ein Terakawa <applause@elfmimi.jp>"]
 edition = "2018"
 description = "Nuvoton ISP_HID protocol library"

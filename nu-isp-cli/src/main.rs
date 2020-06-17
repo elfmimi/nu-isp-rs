@@ -189,6 +189,14 @@ fn main() {
         )
         .subcommand(SubCommand::with_name("info").about("print target information"))
         .subcommand(
+            SubCommand::with_name("boot")
+                .about("boot into application program ( Reset to APROM )")
+                .alias("run")
+                .alias("reset")
+                .alias("reboot")
+                .alias("launch"),
+        )
+        .subcommand(
             SubCommand::with_name("erase").about("erase APROM ( DATA flash will be kept intact )"),
         )
         .subcommand(
@@ -198,7 +206,10 @@ fn main() {
                     Arg::with_name("INPUT")
                         .help("Sets the input file to use")
                         .required(true),
-                ),
+                )
+                .alias("write")
+                .alias("program")
+                .alias("download"),
         );
     let matches = app
         .get_matches_from_safe_borrow(std::env::args())
@@ -217,17 +228,11 @@ fn main() {
             builder.parse_filters(&s);
         } else {
             match matches.occurrences_of("v") {
-                0 => (),
-                1 => {
-                    builder.parse_filters("info");
-                }
-                2 => {
-                    builder.parse_filters("debug");
-                }
-                3 | _ => {
-                    builder.parse_filters("trace");
-                }
-            }
+                0 => builder.parse_filters("warn"),
+                1 => builder.parse_filters("info"),
+                2 => builder.parse_filters("debug"),
+                3 | _ => builder.parse_filters("trace"),
+            };
         }
 
         builder.try_init().unwrap();
@@ -247,7 +252,11 @@ fn main() {
         input = Some(file)
     }
 
-    if matches.is_present("flash") || matches.is_present("info") || matches.is_present("erase") {
+    if matches.is_present("flash")
+        || matches.is_present("info")
+        || matches.is_present("erase")
+        || matches.is_present("boot")
+    {
         if let Some(param) = matches.value_of("INPUT") {
             let pv: Vec<u16> = param
                 .split(':')
@@ -484,6 +493,23 @@ fn main() {
     if matches.is_present("info") {
         do_info(&context);
         println!("Done.");
+    } else if matches.is_present("boot") {
+        println!("Reboot to APROM...");
+        // do_info(&context);
+        context
+            .nu_isp_launch()
+            .map_err(|err| {
+                eprintln!("{}!", err);
+                ecoloredln!(
+                    "{}{}ERROR!{} {:?}",
+                    fg!(Some(Color::Red)),
+                    bold!(true),
+                    reset!(),
+                    err
+                );
+                std::process::exit(1)
+            })
+            .unwrap();
     } else if matches.is_present("erase") {
         println!("Erasing APROM...");
         do_info(&context);

@@ -45,8 +45,8 @@ pub mod error {
     #[derive(Debug)]
     pub enum Error {
         HidError(hidapi::HidError),
+        NoResponse,
         ChecksumError,
-        PacketNumberError,
     }
 
     impl From<hidapi::HidError> for Error {
@@ -59,8 +59,8 @@ pub mod error {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             match *self {
                 Error::HidError(ref err) => write!(f, "{}", err),
+                Error::NoResponse => write!(f, "No Response"),
                 Error::ChecksumError => write!(f, "Checksum Error"),
-                Error::PacketNumberError => write!(f, "Packet Number Error"),
             }
         }
     }
@@ -156,7 +156,37 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn nu_isp_connect(self: &Context<'a>) -> Result<NuIspInfo> {
+    fn checksum(buf: &[u8]) -> u16 {
+        buf.iter().fold(0_u16, |sum, &h| sum.wrapping_add(h as u16))
+    }
+
+    fn read(&self, buf: &mut [u8], pn: u32) -> Result<()> {
+        let d = self.device;
+        let timeout = 5000;
+        let end_time = std::time::Instant::now() + std::time::Duration::from_millis(timeout);
+        let checksum = Self::checksum(&buf[1..]);
+        // This loop is needed to support older crappy bootloaders
+        loop {
+            let remain = (end_time - std::time::Instant::now()).as_millis() as i32;
+            if remain < 0 {
+                return Err(error::Error::NoResponse);
+            }
+            let len = d.read_timeout(&mut buf[0..64], remain)?;
+            if len < 8 {
+                return Err(error::Error::NoResponse);
+            }
+            let rsum = u16::from_le_bytes(buf[0..2].try_into().unwrap());
+            let rpn = u32::from_le_bytes(buf[4..8].try_into().unwrap());
+            if rpn == pn {
+                if rsum != checksum {
+                    return Err(error::Error::ChecksumError);
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    fn nu_isp_connect(&self) -> Result<NuIspInfo> {
         let d = self.device;
         self.rpn.set(0);
 
@@ -169,16 +199,11 @@ impl<'a> Context<'a> {
             buffer[4..8].copy_from_slice(&pn.to_le_bytes());
         }
         d.write(&buffer[0..65])?;
-        d.read(&mut buffer[0..64])?;
-        let rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
-        if rpn != pn + 1 {
-            log::debug!("rpn = {:08X}", rpn);
-            return Err(error::Error::PacketNumberError);
-        }
+        self.read(&mut buffer[0..65], pn + 1)?;
         log::debug!("CONNECT");
 
         // SYNC_PACKNO
-        let pn = rpn + 1;
+        let pn = pn + 2;
         let sync_pn = 0x01234567 as u32;
         let buffer = &mut [0_u8; 65];
         {
@@ -188,31 +213,11 @@ impl<'a> Context<'a> {
             buffer[8..12].copy_from_slice(&sync_pn.to_le_bytes());
         }
         d.write(&buffer[0..65])?;
-        d.read(&mut buffer[0..64])?;
-        let rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
-        if rpn != sync_pn + 1 {
-            return Err(error::Error::PacketNumberError);
-        }
-        log::debug!("SYNC rpn: {:08X} ( sent: {:08X} )", rpn, sync_pn);
-
-        // GET_DEVICEID
-        let pn = rpn + 1;
-        let buffer = &mut [0_u8; 65];
-        {
-            let buffer = &mut buffer[1..];
-            buffer[0] = nu_isp_cmd::GET_DEVICEID;
-            buffer[4..8].copy_from_slice(&pn.to_le_bytes());
-        }
-        d.write(&buffer[0..65])?;
-        d.read(&mut buffer[0..64])?;
-        let rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
-        let pdid = u32::from_le_bytes(buffer[8..12].try_into().unwrap());
-        if rpn != pn + 1 {
-            return Err(error::Error::PacketNumberError);
-        }
+        self.read(&mut buffer[0..65], sync_pn + 1)?;
+        log::debug!("SYNC");
 
         // GET_FWVER
-        let pn = rpn + 1;
+        let pn = sync_pn + 2;
         let buffer = &mut [0_u8; 65];
         {
             let buffer = &mut buffer[1..];
@@ -220,16 +225,27 @@ impl<'a> Context<'a> {
             buffer[4..8].copy_from_slice(&pn.to_le_bytes());
         }
         d.write(&buffer[0..65])?;
-        d.read(&mut buffer[0..64])?;
-        let rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
+        self.read(&mut buffer[0..65], pn + 1)?;
         let fwver = buffer[8];
-        if rpn != pn + 1 {
-            return Err(error::Error::PacketNumberError);
-        }
+        log::debug!("GET_FWVER");
         log::info!("FWVER  {:#04X}", fwver);
 
+        // GET_DEVICEID
+        let pn = pn + 2;
+        let buffer = &mut [0_u8; 65];
+        {
+            let buffer = &mut buffer[1..];
+            buffer[0] = nu_isp_cmd::GET_DEVICEID;
+            buffer[4..8].copy_from_slice(&pn.to_le_bytes());
+        }
+        d.write(&buffer[0..65])?;
+        self.read(&mut buffer[0..65], pn + 1)?;
+        let pdid = u32::from_le_bytes(buffer[8..12].try_into().unwrap());
+        log::debug!("GET_DEVICEID");
+        log::info!("PDID {:08X}", pdid);
+
         // READ_CONFIG
-        let pn = rpn + 1;
+        let pn = pn + 2;
         let buffer = &mut [0_u8; 65];
         {
             let buffer = &mut buffer[1..];
@@ -237,27 +253,28 @@ impl<'a> Context<'a> {
             buffer[4..8].copy_from_slice(&pn.to_le_bytes());
         }
         d.write(&buffer[0..65])?;
-        d.read(&mut buffer[0..64])?;
-        let rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
-        if rpn != pn + 1 {
-            return Err(error::Error::PacketNumberError);
-        }
+        self.read(&mut buffer[0..65], pn + 1)?;
+        log::debug!("READ_CONFIG");
         let config0 = u32::from_le_bytes(buffer[8..12].try_into().unwrap());
         let config1 = u32::from_le_bytes(buffer[12..16].try_into().unwrap());
-        log::debug!("CONFIG {:08X}:{:08X}", config0, config1);
+        log::info!("CONFIG {:08X}:{:08X}", config0, config1);
 
-        self.rpn.set(rpn);
+        if config0 == pdid && config1 == 0 {
+            log::warn!("The bootloader is old. You'd better update it.");
+        }
+
+        self.rpn.set(pn + 1);
         Ok(NuIspInfo {
             pdid,
             config: [config0, config1],
         })
     }
 
-    pub fn nu_isp_info(self: &Context<'a>) -> Result<NuIspInfo> {
+    pub fn nu_isp_info(&self) -> Result<NuIspInfo> {
         self.nu_isp_connect()
     }
 
-    pub fn nu_isp_erase(self: &Context<'a>) -> Result<()> {
+    pub fn nu_isp_erase(&self) -> Result<()> {
         let d = self.device;
         if self.rpn.get() == 0 {
             self.nu_isp_connect()?;
@@ -289,23 +306,12 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
-    pub fn nu_isp_download(self: &Context<'a>, binary: Vec<u8>) -> Result<()> {
-        // TODO check flash size
+    pub fn nu_isp_launch(&self) -> Result<()> {
         let d = self.device;
-
-        let rpn = self.rpn.get();
-        if rpn == 0 {
+        if self.rpn.get() == 0 {
             self.nu_isp_connect()?;
         };
-
-        // UPDATE_APROM
-        let rpn = match self.update_aprom(binary) {
-            Err(err) => {
-                self.progress.aborted();
-                return Err(err);
-            }
-            Ok(_) => self.rpn.get(),
-        };
+        let rpn = self.rpn.get();
 
         // Reset and boot from application
         {
@@ -326,7 +332,29 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
-    fn update_aprom(self: &Context<'a>, data: Vec<u8>) -> Result<()> {
+    pub fn nu_isp_download(&self, binary: Vec<u8>) -> Result<()> {
+        // TODO check flash size
+
+        let rpn = self.rpn.get();
+        if rpn == 0 {
+            self.nu_isp_connect()?;
+        };
+
+        // UPDATE_APROM
+        let rpn = match self.update_aprom(binary) {
+            Err(err) => {
+                self.progress.aborted();
+                return Err(err);
+            }
+            Ok(_) => self.rpn.get(),
+        };
+
+        self.rpn.set(rpn);
+        self.nu_isp_launch()?;
+        Ok(())
+    }
+
+    fn update_aprom(&self, data: Vec<u8>) -> Result<()> {
         let d = self.device;
         let rpn = self.rpn.get();
         let len = data.len();
@@ -340,7 +368,6 @@ impl<'a> Context<'a> {
 
         // UPDATE_APROM
         let pn = rpn + 1;
-        let mut rpn;
         let buffer = &mut [0_u8; 65];
         {
             let buffer = &mut buffer[1..];
@@ -358,28 +385,16 @@ impl<'a> Context<'a> {
             }
         }
         d.write(&buffer[0..65])?;
-        let checksum = buffer[1..]
-            .iter()
-            .fold(0_u16, |sum, &b| sum.wrapping_add(b as u16));
-        d.read(&mut buffer[0..64])?;
-        let rsum = u16::from_le_bytes(buffer[0..2].try_into().unwrap());
-        rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
-        if rsum != checksum {
-            return Err(error::Error::ChecksumError);
-        }
-        if rpn != pn + 1 {
-            return Err(error::Error::PacketNumberError);
-        }
-
+        self.read(&mut buffer[0..65], pn + 1)?;
         if len == 0 {
             self.progress.emit(ProgressEvent::FinishedErasing);
-            self.rpn.set(rpn);
+            self.rpn.set(pn + 1);
             return Ok(());
         }
 
         self.progress.erased();
 
-        let mut pn = rpn + 1;
+        let mut pn = pn + 2;
         let mut idx = 48;
         while idx < len {
             self.progress.programmed(idx as u32);
@@ -392,25 +407,13 @@ impl<'a> Context<'a> {
                 buffer[8..][..len].copy_from_slice(&data[idx..][..len]);
             }
             d.write(&buffer[0..65])?;
-            let checksum = buffer[1..]
-                .iter()
-                .fold(0_u16, |sum, &b| sum.wrapping_add(b as u16));
-            d.read(&mut buffer[0..64])?;
-            let rsum = u16::from_le_bytes(buffer[0..2].try_into().unwrap());
-            rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
-            if rsum != checksum {
-                return Err(error::Error::ChecksumError);
-            }
-            if rpn != pn + 1 {
-                return Err(error::Error::PacketNumberError);
-            }
-
-            pn = rpn + 1;
+            self.read(&mut buffer[0..65], pn + 1)?;
+            pn = pn + 2;
             idx += 56;
         }
         self.progress.finished();
 
-        self.rpn.set(rpn);
+        self.rpn.set(pn - 1);
         return Ok(());
     }
 }
