@@ -43,7 +43,7 @@ Then replug your board and let it into bootloader mode again.
 ```bash
 $ nu-isp-cli
 Nuvoton NuMicro ISP_HID Programming Tool [unofficial]
-Version 0.5.0
+Version 0.7.0
 
 Quick Reference:
 

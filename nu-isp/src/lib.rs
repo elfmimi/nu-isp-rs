@@ -20,23 +20,29 @@ macro_rules! pdid_map {
 pub fn get_partinfo(pdid: u32) -> Option<PartInfo> {
     let pdid_map = pdid_map! {
         // PARTNAME { pdid, flash_size }
-        // NUC123ZC2AN { 0x00012345, 36*1024 },
-        // NUC123ZD4AN { 0x00012355, 68*1024 },
-        // NUC123LC2AN { 0x00012325, 36*1024 },
+        /* NUC123 */
+        NUC123ZC2AN { 0x00012345, 36*1024 },
+        NUC123ZD4AN { 0x00012355, 68*1024 },
+        NUC123LC2AN { 0x00012325, 36*1024 },
         NUC123LD4AN { 0x00012335, 68*1024 },
-        // NUC123SC2AN { 0x00012305, 36*1024 },
-        // NUC123SD4AN { 0x00012315, 68*1024 },
-        // NUC123ZC2AE { 0x10012345, 36*1024 },
-        // NUC123ZD4AE { 0x10012355, 68*1024 },
-        // NUC123LC2AE { 0x10012325, 36*1024 },
-        // NUC123LD4AE { 0x10012335, 68*1024 },
-        // NUC123SC2AE { 0x10012305, 36*1024 },
-        // NUC123SD4AE { 0x10012315, 68*1024 },
+        NUC123SC2AN { 0x00012305, 36*1024 },
+        NUC123SD4AN { 0x00012315, 68*1024 },
+        NUC123ZC2AE { 0x10012345, 36*1024 },
+        NUC123ZD4AE { 0x10012355, 68*1024 },
+        NUC123LC2AE { 0x10012325, 36*1024 },
+        NUC123LD4AE { 0x10012335, 68*1024 },
+        NUC123SC2AE { 0x10012305, 36*1024 },
+        NUC123SD4AE { 0x10012315, 68*1024 },
+        /* NUC126 */
+        NUC126NE4AE { 0x00C05206, 128*1024 },
         NUC126LE4AE { 0x00C05205, 128*1024 },
         NUC126LG4AE { 0x00C05204, 256*1024 },
-        // NUC126SE4AE { 0x00C05213, 128*1024 },
-        // NUC126SG4AE { 0x00C05212, 256*1024 },
-        // NUC126VG4AE { 0x00C05231, 256*1024 },
+        NUC126SE4AE { 0x00C05213, 128*1024 },
+        NUC126SG4AE { 0x00C05212, 256*1024 },
+        NUC126VG4AE { 0x00C05231, 256*1024 },
+        NUC126KG4AE { 0x00C05230, 256*1024 },
+        /* NUC029 */
+        NUC029LGE { 0x00295C50, 256*1024 },
     };
     pdid_map(pdid)
 }
@@ -298,7 +304,13 @@ impl<'a> Context<'a> {
             buffer[0] = nu_isp_cmd::RUN_LDROM;
             buffer[4..8].copy_from_slice(&pn.to_le_bytes());
         }
-        d.write(&buffer[0..65])?;
+        match d.write(&buffer[0..65]) {
+            Ok(_) => (),
+            // Here, we are forced to ignore any error which is caused by
+            // target immediately stopping responding upon our request.
+            Err(hidapi::HidError::HidApiError { .. }) => (),
+            Err(e) => Err(e)?
+        }
         // d.read(&mut buffer[0..64])?;
         // let _rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
 
@@ -323,7 +335,14 @@ impl<'a> Context<'a> {
                 buffer[0] = nu_isp_cmd::RUN_APROM;
                 buffer[4..8].copy_from_slice(&pn.to_le_bytes());
             }
-            d.write(&buffer[0..65])?;
+            // d.write(&buffer[0..65])?;
+            match d.write(&buffer[0..65]) {
+                Ok(_) => (),
+                // Here, we are forced to ignore any error which is caused by
+                // target immediately stopping responding upon our request.
+                Err(hidapi::HidError::HidApiError { .. }) => (),
+                Err(e) => Err(e)?
+            }
             // d.read(&mut buffer[0..64])?;
             // let _rpn = u32::from_le_bytes(buffer[4..8].try_into().unwrap());
         }
