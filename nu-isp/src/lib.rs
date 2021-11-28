@@ -43,6 +43,8 @@ pub fn get_partinfo(pdid: u32) -> Option<PartInfo> {
         NUC126KG4AE { 0x00C05230, 256*1024 },
         /* NUC029 */
         NUC029LGE { 0x00295C50, 256*1024 },
+        /* NuMicro M0-family */
+        M032SE3AE { 0x01132E10, 128*1024 },
     };
     pdid_map(pdid)
 }
