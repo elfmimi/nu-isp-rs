@@ -14,7 +14,7 @@ No special preparaiton needed. Install it, and it just works.
 
 ### linux
 
-You'll need libusb. Depending on your distribution, you might need to `sudo apt-get install libudev-dev libusb-1.0-0-dev`.
+You'll need libusb. Depending on your distribution, you might need to `sudo apt-get install libusb-1.0-0-dev pkg-config`.
 
 If you'd like not to use sudo everytime, you'll need udev rules. With your board plugged in and in bootloader mode, use `lsusb` to find its vendor-id and product-id, seen here as 0416:a316.
 
@@ -43,7 +43,7 @@ Then replug your board and let it into bootloader mode again.
 ```bash
 $ nu-isp-cli
 Nuvoton NuMicro ISP_HID Programming Tool [unofficial]
-Version 0.7.0
+Version 0.7.1
 
 Quick Reference:
 
@@ -82,5 +82,5 @@ $ nu-isp-cli firmware.elf
 
 ## supported chips
 
-Currently it is only tested with NUC123 and NUC126 but it should work with many other chips with conformant bootloaders.
+It is tested with NUC123 , NUC126 , NUC029 and M032 series. and it should work with many other chips as long as their bootloaders are compatible.
 I'll happily add new chips to the list upon your report confirming its correct operation.

@@ -210,7 +210,7 @@ checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 
 [[package]]
 name = "nu-isp"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "hidapi",
  "log",
@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "nu-isp-cli"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "atty",
  "clap",
