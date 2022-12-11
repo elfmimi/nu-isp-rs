@@ -43,7 +43,7 @@ Then replug your board and let it into bootloader mode again.
 ```bash
 $ nu-isp-cli
 Nuvoton NuMicro ISP_HID Programming Tool [unofficial]
-Version 0.7.1
+Version 0.7.2
 
 Quick Reference:
 
@@ -82,5 +82,5 @@ $ nu-isp-cli firmware.elf
 
 ## supported chips
 
-It is tested with NUC123 , NUC126 , NUC029 and M032 series. and it should work with many other chips as long as their bootloaders are compatible.
+It is tested with NUC123 , NUC126 , NUC029, M252, M253 and M032 series. and it should work with many other chips as long as their bootloaders are compatible.
 I'll happily add new chips to the list upon your report confirming its correct operation.

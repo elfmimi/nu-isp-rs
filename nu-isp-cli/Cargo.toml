@@ -1,6 +1,6 @@
 [package]
 name = "nu-isp-cli"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Ein Terakawa <applause@elfmimi.jp>"]
 edition = "2018"
 description = "CLI tool for Nuvoton ISP_HID Bootloaders"
@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [dependencies.nu-isp]
-version = "0.7.1"
+version = "0.7.2"
 path = "../nu-isp"
 
 [dependencies]

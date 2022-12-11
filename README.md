@@ -2,6 +2,9 @@
 ## [nu-isp](./nu-isp/README.md)
 
 ## ChangeLog
+### v0.7.2
+- add M252/M253 series and NUC1261 variants to part list
+
 ### v0.7.1
 - add M032 series and NUC029 variants to part list
 
